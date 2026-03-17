@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>蓝牙参数配置工具 v2.2</title>
+    <style>
+        :root {
+            --primary: #007aff;
+            --success: #34c759;
+            --danger: #ff3b30;
+            --bg: #f2f2f7;
+            --card: #ffffff;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            padding: 15px;
+            color: #333;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        h3 {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            margin-top: 0;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="number"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            background: #f9f9f9;
+        }
+
+        /* 按钮样式 */
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+            margin-bottom: 10px;
+        }
+
+        button:active {
+            opacity: 0.7;
+        }
+
+        .btn-connect {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-send {
+            background-color: var(--success);
+            color: white;
+        }
+
+        .btn-disconnect {
+            background-color: var(--danger);
+            color: white;
+            display: none;
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ccc;
+            margin-right: 5px;
+        }
+
+        .connected .status-dot {
+            background-color: var(--success);
+        }
+
+        .console {
+            background: #1c1c1e;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 8px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+
+        .console p {
+            margin: 2px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        /* UUID设置折叠区 */
+        details {
+            margin-bottom: 15px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        summary {
+            cursor: pointer;
+            padding: 5px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="card" id="connCard">
+        <h2>📡 蓝牙连接</h2>
+        <div style="margin-bottom: 10px; font-size: 14px;">
+            状态: <span id="statusText">未连接</span>
+            <span class="status-dot" id="statusDot"></span>
+        </div>
+
+        <details>
+            <summary>⚙️ 展开设置 UUID (如果无法写入请点这里)</summary>
+            <div class="form-group">
+                <label>Service UUID (服务):</label>
+                <input type="text" id="serviceUUID" value="0000ffe0-0000-1000-8000-00805f9b34fb">
+            </div>
+            <div class="form-group">
+                <label>Char UUID (特征值/写入):</label>
+                <input type="text" id="charUUID" value="0000ffe1-0000-1000-8000-00805f9b34fb">
+            </div>
+            <p style="font-size: 11px; color:#999;">默认是 Nordic UART 服务，请修改为您设备的 UUID。</p>
+        </details>
+
+        <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">🔍 扫描并连接设备</button>
+        <button class="btn-disconnect" id="btnDisconnect" onclick="disconnectBluetooth()">断开连接</button>
+    </div>
+
+    <div class="card">
+        <h2>📝 参数配置</h2>
+
+        <!-- 新增：设备实时状态面板 -->
+        <div style="background: #eef2ff; padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #d0d7de;">
+            <h3 style="color: #007aff; margin-bottom: 10px;">📊 设备实时状态 (每秒更新)</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="background: #fff; padding: 10px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="font-size: 12px; color: #666;">当前采样频率</div>
+                    <div style="font-size: 22px; font-weight: bold; color: #333; margin-top: 5px;">
+                        <span id="dispFreq">--</span> <small style="font-size: 14px; font-weight: normal;">Hz</small>
+                    </div>
+                </div>
+                <div style="background: #fff; padding: 10px; border-radius: 8px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="font-size: 12px; color: #666;">当前工作模式</div>
+                    <div style="font-size: 22px; font-weight: bold; color: #34c759; margin-top: 5px;" id="dispMode">--</div>
+                </div>
+            </div>
+            <div style="margin-top: 8px; font-size: 11px; color: #999; text-align: right;">
+                上次更新: <span id="lastUpdate">等待数据...</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>采样时长 (秒):</label>
+            <input type="number" id="inputDuration" value="60" placeholder="例如: 60">
+        </div>
+
+        <div class="form-group">
+            <label>采样频率 (Hz) <small>最大 1000</small>:</label>
+            <input type="number" id="inputFreq" value="100" max="1000" placeholder="例如: 100">
+        </div>
+
+        <div class="form-group">
+            <label>采样间隔 (秒):</label>
+            <input type="number" id="inputInterval" value="5" placeholder="例如: 5">
+        </div>
+
+        <button class="btn-send" onclick="sendConfig()">📤 发送配置数据包</button>
+        <button class="btn-send" style="background-color: #ff9500;" onclick="setRealTimeMode()">🚀 配置为实时输出模式</button>
+    </div>
+
+    <div class="card">
+        <h2>📟 发送日志</h2>
+        <div class="console" id="consoleLog">
+            <p>> 等待操作...</p>
+        </div>
+        <button onclick="document.getElementById('consoleLog').innerHTML=''"
+            style="margin-top:10px; background:#ddd; color:#333; padding:8px;">清空日志</button>
+    </div>
+
+    <script>
+        // 全局变量存储蓝牙对象
+        let bluetoothDevice;
+        let gattServer;
+        let writeCharacteristic;
+
+        const statusText = document.getElementById('statusText');
+        const statusDot = document.getElementById('statusDot');
+        const btnConnect = document.getElementById('btnConnect');
+        const btnDisconnect = document.getElementById('btnDisconnect');
+        const logBox = document.getElementById('consoleLog');
+
+        // 日志输出函数
+        function log(msg, type = 'info') {
+            const p = document.createElement('p');
+            const time = new Date().toLocaleTimeString();
+            p.innerText = `[${time}] ${msg}`;
+            if (type === 'error') p.style.color = '#ff3b30';
+            logBox.appendChild(p);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        // 1. 连接蓝牙
+        async function connectBluetooth() {
+            const sUUID = document.getElementById('serviceUUID').value.toLowerCase();
+            const cUUID = document.getElementById('charUUID').value.toLowerCase();
+
+            try {
+                log("正在请求蓝牙设备...");
+                // 请求设备，必须传入 optionalServices 才能后续访问
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [sUUID]
+                });
+
+                bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+                log(`连接到: ${bluetoothDevice.name}...`);
+                gattServer = await bluetoothDevice.gatt.connect();
+
+                log("获取服务...");
+                const service = await gattServer.getPrimaryService(sUUID);
+
+                log("获取写入特征值...");
+                writeCharacteristic = await service.getCharacteristic(cUUID);
+
+                // --- 新增：开启通知以接收状态上报 ---
+                try {
+                    log("正在开启状态通知 (Notify)...");
+                    await writeCharacteristic.startNotifications();
+                    writeCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                    log("✅ 状态通知已开启", "success");
+                } catch (e) {
+                    log("⚠️ 开启通知失败 (可能该特征值不支持 Notify): " + e, 'warning');
+                    // 尝试获取标准 RX 特征值 (如果是 Nordic UART 服务)
+                    // 这里为了简化，先假设 TX/RX 是同一个或者用户填写的 UUID 支持 Notify
+                }
+                // ----------------------------------
+
+                // 更新UI状态
+                statusText.innerText = "已连接: " + bluetoothDevice.name;
+                document.getElementById('connCard').classList.add('connected');
+                btnConnect.style.display = 'none';
+                btnDisconnect.style.display = 'block';
+                log("✅ 连接成功，准备就绪！");
+
+            } catch (error) {
+                log("连接失败: " + error, 'error');
+                console.error(error);
+                if (error.toString().includes("User cancelled")) {
+                    alert("您取消了连接，或未选择设备。");
+                } else if (error.toString().includes("HTTPS")) {
+                    alert("错误：Web Bluetooth 必须在 HTTPS 环境下运行！");
+                }
+            }
+        }
+
+        // 2. 断开连接
+        function disconnectBluetooth() {
+            if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+                bluetoothDevice.gatt.disconnect();
+            }
+        }
+
+        function onDisconnected() {
+            statusText.innerText = "已断开";
+            document.getElementById('connCard').classList.remove('connected');
+            btnConnect.style.display = 'block';
+            btnDisconnect.style.display = 'none';
+            log("❌ 设备已断开连接", 'error');
+            writeCharacteristic = null;
+        }
+
+        // 3. 处理收到的通知数据 (状态上报)
+        function handleNotifications(event) {
+            const value = event.target.value;
+            // 为了调试，先转为 Hex 字符串 (注意处理 byteOffset)
+            const bufferCopy = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+            const hexString = Array.from(bufferCopy)
+                .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+                .join(' ');
+            
+            log(`收到数据: ${hexString}`);
+            
+            // 协议要求包长为 8 字节
+            if (value.byteLength !== 8) {
+                log(`❌ 长度错误 (期望8, 实际${value.byteLength})`, 'warning');
+                return;
+            }
+            
+            const view = new DataView(value.buffer);
+            
+            // 1. 检查包头 Header 1 (0xAA) 和 Header 2 (0x55)
+            if (view.getUint8(0) !== 0xAA || view.getUint8(1) !== 0x55) {
+                log(`❌ 包头错误 (实际 ${view.getUint8(0).toString(16).toUpperCase()} ${view.getUint8(1).toString(16).toUpperCase()})`, 'warning');
+                return;
+            }
+            
+            // 2. 校验 CRC16
+            // 提取前 6 个字节用于计算 CRC
+            const dataForCrc = bufferCopy.slice(0, 6);
+            
+            const localCRC = calculateCRC16(dataForCrc);
+            const remoteCRC = view.getUint16(6, true); // Little Endian
+            
+            if (localCRC !== remoteCRC) {
+                log(`❌ CRC失败 (收到 ${remoteCRC.toString(16).toUpperCase()}, 计算 ${localCRC.toString(16).toUpperCase()})`, 'error');
+                return; 
+            }
+            
+            // 3. 解析数据
+            const freq = view.getUint16(2, true); // Offset 2, Little Endian
+            const modeVal = view.getUint8(4);     // Offset 4
+            
+            // 4. 更新 UI
+            document.getElementById('dispFreq').innerText = freq;
+            
+            let modeStr = "未知";
+            let color = "#999";
+            
+            if (modeVal === 0) {
+                modeStr = "空闲";
+                color = "#999"; // 灰色
+            } else if (modeVal === 1) {
+                modeStr = "实时";
+                color = "#34c759"; // 绿色
+            } else if (modeVal === 2) {
+                modeStr = "周期";
+                color = "#007aff"; // 蓝色
+            }
+            
+            const modeEl = document.getElementById('dispMode');
+            modeEl.innerText = modeStr;
+            modeEl.style.color = color;
+            
+            document.getElementById('lastUpdate').innerText = new Date().toLocaleTimeString();
+        }
+
+        // 4. 构建数据包并发送
+        async function sendConfig() {
+            if (!writeCharacteristic) {
+                alert("请先连接蓝牙设备！");
+                return;
+            }
+
+            // 获取用户输入
+            const duration = parseInt(document.getElementById('inputDuration').value) || 0;
+            let freq = parseInt(document.getElementById('inputFreq').value) || 0;
+            const interval = parseInt(document.getElementById('inputInterval').value) || 0;
+
+            // 简单校验
+            if (freq > 1000) {
+                alert("频率不能超过 1000Hz");
+                freq = 1000;
+                document.getElementById('inputFreq').value = 1000;
+            }
+
+            // --- 构建 Buffer (10字节) ---
+            const buffer = new ArrayBuffer(10);
+            const view = new DataView(buffer);
+
+            // 0-1: 包头 0xA5 0x5A
+            view.setUint8(0, 0xA5);
+            view.setUint8(1, 0x5A);
+
+            // 2-3: 时长 (Little Endian)
+            view.setUint16(2, duration, true);
+
+            // 4-5: 频率 (Little Endian)
+            view.setUint16(4, freq, true);
+
+            // 6-7: 间隔 (Little Endian)
+            view.setUint16(6, interval, true);
+
+            // 计算前8个字节的 CRC
+            const dataForCrc = new Uint8Array(buffer.slice(0, 8)); // 取前8个字节算CRC
+            const crc = calculateCRC16(dataForCrc);
+
+            // 8-9: CRC (Little Endian)
+            view.setUint16(8, crc, true);
+
+            // --- 发送 ---
+            try {
+                await writeCharacteristic.writeValue(buffer);
+
+                // 将发送的数据转为 Hex 字符串显示在日志里
+                const hexString = Array.from(new Uint8Array(buffer))
+                    .map(b => b.toString(16).toUpperCase().padStart(2, '0'))
+                    .join(' ');
+
+                log(`📤 发送成功: ${hexString}`);
+                log(`解析: 时长=${duration}s, 频率=${freq}Hz, 间隔=${interval}s`);
+
+            } catch (error) {
+                log("发送失败: " + error, 'error');
+            }
+        }
+
+        // 快捷设置：实时输出模式
+        function setRealTimeMode() {
+            // 获取当前用户设置的频率，而不是强制 50Hz
+            const currentFreq = parseInt(document.getElementById('inputFreq').value) || 50;
+
+            // 设置输入框的值，方便用户看到当前状态
+            // 实时模式下，时长设为极大值 (如65535秒)，间隔设为0
+            document.getElementById('inputDuration').value = 65535; 
+            document.getElementById('inputInterval').value = 0;    // 0秒间隔
+
+            // 自动触发发送
+            sendConfig();
+            log(`已切换至实时输出模式 (频率 ${currentFreq}Hz, 持续输出)`, "warning");
+        }
+
+        // 4. CRC16 计算函数 (Modbus)
+        function calculateCRC16(buffer) {
+            let crc = 0xFFFF;
+            for (let i = 0; i < buffer.length; i++) {
+                crc ^= buffer[i];
+                for (let j = 8; j !== 0; j--) {
+                    if ((crc & 0x0001) !== 0) {
+                        crc >>= 1;
+                        crc ^= 0xA001;
+                    } else {
+                        crc >>= 1;
+                    }
+                }
+            }
+            return crc;
+        }
+
+        // 检查浏览器兼容性
+        if (!navigator.bluetooth) {
+            log("⚠️ 当前浏览器不支持 Web Bluetooth。iOS请使用Bluefy，安卓请使用Chrome。", 'error');
+            btnConnect.disabled = true;
+            btnConnect.innerText = "浏览器不支持蓝牙";
+        }
+    </script>
+</body>
+
+</html>
