@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $sourceFile = "D:\project\freertos\web界面\手机网页\蓝牙V2.1.HTML"
 $targetFile = "D:\project\手机控制网页\index.html"
