@@ -250,7 +250,9 @@
                 log("正在请求蓝牙设备...");
                 // 请求设备，必须传入 optionalServices 才能后续访问
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
+                    filters: [
+                        { namePrefix: "千山万水" }
+                    ],
                     optionalServices: [sUUID]
                 });
 
