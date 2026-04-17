@@ -161,7 +161,7 @@
                 <label>Char UUID (特征值/写入):</label>
                 <input type="text" id="charUUID" value="0000ffe1-0000-1000-8000-00805f9b34fb">
             </div>
-            <p style="font-size: 11px; color:#999;">默认是 Nordic UART 服务，请修改为您设备的 UUID。</p>
+            <p style="font-size: 11px; color:#999;">默认是常见 BLE 透传模块 UUID，请按实际设备修改。</p>
         </details>
 
         <button class="btn-connect" id="btnConnect" onclick="connectBluetooth()">🔍 扫描并连接设备</button>
@@ -250,9 +250,7 @@
                 log("正在请求蓝牙设备...");
                 // 请求设备，必须传入 optionalServices 才能后续访问
                 bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { namePrefix: "千山万水" }
-                    ],
+                    acceptAllDevices: true,
                     optionalServices: [sUUID]
                 });
 
@@ -331,7 +329,7 @@
                 return;
             }
             
-            const view = new DataView(value.buffer);
+            const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
             
             // 1. 检查包头 Header 1 (0xAA) 和 Header 2 (0x55)
             if (view.getUint8(0) !== 0xAA || view.getUint8(1) !== 0x55) {
