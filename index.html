@@ -132,6 +132,48 @@
             box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.12);
         }
 
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .filter-chip {
+            position: relative;
+        }
+
+        .filter-chip input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .filter-chip span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 48px;
+            padding: 10px 12px;
+            border-radius: 14px;
+            border: 1px solid var(--border);
+            background: #fbfdff;
+            color: var(--text);
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.18s ease;
+        }
+
+        .filter-chip input:checked + span {
+            background: rgba(10, 132, 255, 0.1);
+            border-color: rgba(10, 132, 255, 0.55);
+            color: var(--primary);
+            box-shadow: 0 6px 16px rgba(10, 132, 255, 0.12);
+        }
+
+        .filter-chip input:focus + span {
+            box-shadow: 0 0 0 4px rgba(10, 132, 255, 0.12);
+        }
+
         details {
             margin-top: 12px;
         }
@@ -248,14 +290,23 @@
             <input type="number" id="inputInterval" value="0" placeholder="例如 5">
         </div>
         <div class="form-group">
-            <label for="filterMode">滤波模式选择</label>
-            <select id="filterMode">
-                <option value="0" selected>不滤波</option>
-                <option value="1">滑动均值</option>
-                <option value="2">卡尔曼</option>
-            </select>
+            <label>滤波模式选择</label>
+            <div class="filter-grid" id="filterModeGroup">
+                <label class="filter-chip">
+                    <input type="radio" name="filterModeOption" value="0" checked>
+                    <span>不滤波</span>
+                </label>
+                <label class="filter-chip">
+                    <input type="radio" name="filterModeOption" value="1">
+                    <span>滑动均值</span>
+                </label>
+                <label class="filter-chip">
+                    <input type="radio" name="filterModeOption" value="2">
+                    <span>卡尔曼</span>
+                </label>
+            </div>
         </div>
-        <p class="subtle">默认按实时模式填好参数：时长 65535 秒、间隔 0 秒。点“发送配置数据包”时会连同滤波模式一起发给单片机。</p>
+        <p class="subtle">上方“滤波模式”显示的是设备当前状态；这里选的是本次准备发送的滤波模式。默认按实时模式填好参数：时长 65535 秒、间隔 0 秒。</p>
 
         <button class="btn-send" onclick="sendConfig()">发送配置数据包</button>
         <button class="btn-realtime" onclick="setRealTimeMode()">配置为实时输出模式</button>
@@ -274,12 +325,15 @@
         let gattServer = null;
         let writeCharacteristic = null;
         let lastKnownModeValue = 1;
+        let pendingFilterMode = 0;
+        let deviceFilterMode = 0;
 
         const statusText = document.getElementById('statusText');
         const statusDot = document.getElementById('statusDot');
         const btnConnect = document.getElementById('btnConnect');
         const btnDisconnect = document.getElementById('btnDisconnect');
         const logBox = document.getElementById('consoleLog');
+        const filterModeInputs = Array.from(document.querySelectorAll('input[name="filterModeOption"]'));
 
         function log(msg, type = 'info') {
             const p = document.createElement('p');
@@ -296,6 +350,20 @@
             if (filterMode === 1) return '滑动均值';
             if (filterMode === 2) return '卡尔曼';
             return '不滤波';
+        }
+
+        function getSelectedFilterMode() {
+            const checked = document.querySelector('input[name="filterModeOption"]:checked');
+            return checked ? parseInt(checked.value, 10) || 0 : 0;
+        }
+
+        function setSelectedFilterMode(filterMode) {
+            const value = String(filterMode);
+            const target = filterModeInputs.find((input) => input.value === value);
+            if (target) {
+                target.checked = true;
+                pendingFilterMode = filterMode;
+            }
         }
 
         function updateModeUi(modeVal) {
@@ -325,7 +393,7 @@
         function updateFilterUi(filterMode) {
             const filterName = getFilterName(filterMode);
             document.getElementById('dispFilter').innerText = filterName;
-            document.getElementById('filterMode').value = String(filterMode);
+            deviceFilterMode = filterMode;
         }
 
         async function connectBluetooth() {
@@ -443,7 +511,7 @@
             const duration = parseInt(document.getElementById('inputDuration').value, 10) || 0;
             let freq = parseInt(document.getElementById('inputFreq').value, 10) || 0;
             const interval = parseInt(document.getElementById('inputInterval').value, 10) || 0;
-            const filterMode = parseInt(document.getElementById('filterMode').value, 10) || 0;
+            const filterMode = getSelectedFilterMode();
 
             if (freq > 1000) {
                 freq = 1000;
@@ -468,7 +536,6 @@
                 const hexString = Array.from(new Uint8Array(buffer)).map(b => b.toString(16).toUpperCase().padStart(2, '0')).join(' ');
                 log(`发送成功：${hexString}`, 'success');
                 log(`解析：时长=${duration}s 频率=${freq}Hz 间隔=${interval}s 滤波=${getFilterName(filterMode)}`);
-                updateFilterUi(filterMode);
                 updateModeUi(interval === 0 ? 1 : 2);
             } catch (error) {
                 log(`发送失败：${error}`, 'error');
@@ -487,6 +554,15 @@
             btnConnect.disabled = true;
             btnConnect.innerText = '当前浏览器不支持蓝牙';
         }
+
+        filterModeInputs.forEach((input) => {
+            input.addEventListener('change', () => {
+                pendingFilterMode = getSelectedFilterMode();
+                log(`已选择待发送滤波模式：${getFilterName(pendingFilterMode)}，当前设备仍是：${getFilterName(deviceFilterMode)}`);
+            });
+        });
+
+        setSelectedFilterMode(0);
     </script>
 </body>
 </html>
