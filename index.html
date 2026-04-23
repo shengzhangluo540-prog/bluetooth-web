@@ -279,7 +279,7 @@
         <h2>参数配置</h2>
         <div class="form-group">
             <label for="inputDuration">采样时长（秒）</label>
-            <input type="number" id="inputDuration" value="65535" placeholder="例如 60">
+            <input type="number" id="inputDuration" value="10" min="0" max="10" placeholder="最长 10">
         </div>
         <div class="form-group">
             <label for="inputFreq">采样频率（Hz）</label>
@@ -287,7 +287,7 @@
         </div>
         <div class="form-group">
             <label for="inputInterval">采样间隔（秒）</label>
-            <input type="number" id="inputInterval" value="0" placeholder="例如 5">
+            <input type="number" id="inputInterval" value="0" min="0" max="10800" placeholder="最长 10800">
         </div>
         <div class="form-group">
             <label>滤波模式选择</label>
@@ -306,7 +306,7 @@
                 </label>
             </div>
         </div>
-        <p class="subtle">上方“滤波模式”显示的是设备当前状态；这里选的是本次准备发送的滤波模式。默认按实时模式填好参数：时长 65535 秒、间隔 0 秒。</p>
+        <p class="subtle">上方“滤波模式”显示的是设备当前状态；这里选的是本次准备发送的滤波模式。采样时长最长 10 秒，采样间隔最长 10800 秒（3 小时）。</p>
 
         <button class="btn-send" onclick="sendConfig()">发送配置数据包</button>
         <button class="btn-realtime" onclick="setRealTimeMode()">配置为实时输出模式</button>
@@ -480,6 +480,26 @@
             }
 
             const view = new DataView(value.buffer, value.byteOffset, value.byteLength);
+            if (view.getUint8(0) === 0xEE && view.getUint8(1) === 0x55) {
+                const calcCrc = calculateCRC16(raw.slice(0, 6));
+                const recvCrc = view.getUint16(6, true);
+                if (calcCrc !== recvCrc) {
+                    log(`错误包 CRC 错误：收到 ${recvCrc.toString(16)} 计算 ${calcCrc.toString(16)}`, 'error');
+                    return;
+                }
+
+                const errCode = view.getUint8(2);
+                const errValue = view.getUint16(4, true);
+                if (errCode === 1) {
+                    log(`设备拒绝配置：采样时长 ${errValue}s 超过 10s`, 'error');
+                } else if (errCode === 2) {
+                    log(`设备拒绝配置：采样间隔 ${errValue}s 超过 10800s`, 'error');
+                } else {
+                    log(`设备拒绝配置：未知错误 ${errCode}，值 ${errValue}`, 'error');
+                }
+                return;
+            }
+
             if (view.getUint8(0) !== 0xAA || view.getUint8(1) !== 0x55) {
                 log('状态包包头错误', 'warning');
                 return;
@@ -513,6 +533,18 @@
             const interval = parseInt(document.getElementById('inputInterval').value, 10) || 0;
             const filterMode = getSelectedFilterMode();
 
+            if (duration > 10) {
+                log(`发送失败：采样时长 ${duration}s 超过 10s`, 'error');
+                alert('采样时长最长 10 秒');
+                return;
+            }
+
+            if (interval > 10800) {
+                log(`发送失败：采样间隔 ${interval}s 超过 10800s（3小时）`, 'error');
+                alert('采样间隔最长 10800 秒（3小时）');
+                return;
+            }
+
             if (freq > 1000) {
                 freq = 1000;
                 document.getElementById('inputFreq').value = '1000';
@@ -543,7 +575,7 @@
         }
 
         function setRealTimeMode() {
-            document.getElementById('inputDuration').value = '65535';
+            document.getElementById('inputDuration').value = '10';
             document.getElementById('inputInterval').value = '0';
             sendConfig();
             log('已切换到实时输出模式模板', 'warning');
